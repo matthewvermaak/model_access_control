@@ -1,0 +1,145 @@
+== MAC -- [M]odel [A]ccess [C]ontrol
+This plugin provides Model Security with the "Security in Depth" approach. It accomplishes
+this task simply by allowing you to intercept method calls and activerecord callbacks
+and run arbitrary code.
+
+=== Installation
+script/generate mac
+      create  config/initializers/mac.rb
+
+rake db:migrate:up VERSION=XXXXXXXXXX
+
+=== Usage
+Using the config/initializers/mac.rb file declare your principals, interception points, and filters.
+
+  Mac.configure do |config|
+    config.principal User do
+      User.current = @session.user
+    end
+
+    config.intercept Hauler, [:update, :create] do
+      if User.current && User.current == User.first
+        return true
+      end
+      return false
+    end
+
+    config.secured_filter [Hauler, Vendor] do
+      if User.current && User.current == User.first
+        {}
+      else
+        {:conditions => ["account_id = ?", user.current.account_id]}
+      end
+    end
+  end
+
+While configuring your principals: the block passed to the principal will be used to set an ApplicationController
+before filter. It is expected to use this block to set the principal injected class variable current.
+
+While configuring your filters for read activities: the block defined in the configuration will be injected as the 
+body of a named_scope :secured within each model listed in the array. In many cases, the secured filters are useful
+in defining the logic for your interception points.
+
+For example:
+
+  config.intercept Hauler, [:update, :destroy] do
+    can_see = !Hauler.secured.find(:first, :conditions => ["haulers.account_id IN (?) AND haulers.id = ?", User.current.account_ids, self.id]).nil?
+    return can_see  
+  end
+
+While configuring your interception points the signature requires the Model followed by an array of methods and finally
+by a block of code to inject. The methods that can be intercepted include the ActiveRecord::Base callback methods;
+[:update, :create, :save, :destroy]. In addition, any instance or class method of the Model can be intercepted.
+
+For instance, consider:
+
+  class A
+    def self.suspend
+      puts "self - suspending"
+    end
+    
+    def suspend
+      puts "instance - suspending"
+    end
+  end
+
+Assuming an interception defined as:
+  
+  config.intercept A, [:suspend] do
+    puts "intercepting instance_method suspend FROM A"
+    return true
+  end
+
+  config.intercept A, ["self.suspend"] do
+    puts "intercepting class_method suspend FROM A"
+    return true
+  end
+
+Then the following would be true:
+  
+  A.suspend
+  # => "intercepting class_method suspend FROM A"
+       "self - suspending"
+
+  A.new.suspend
+  # => "intercepting instance_method suspend FROM A"
+       "instance - suspending"
+
+Introducing class inheritance works as expected:
+
+  class B < A
+  end
+
+  B.suspend 
+  # => "intercepting class_method suspend FROM A"
+       "self - suspending"
+ 
+  B.new.suspend
+  # => "intercepting instance_method suspend FROM A"
+       "instance - suspending"
+
+Defining an interception on B's parent method from B will result
+in overriding A's interception while within B, which was the desired
+behavior:
+
+  config.intercept B, [:suspend] do
+    puts "intercepting instance_method FROM B"
+    return true 
+  end
+
+  B.suspend
+  # => "intercepting class_method suspend FROM A"
+       "self - suspending"
+  
+  B.new.suspend
+  # => "intercepting instance_method FROM B"
+       "instance - suspending"
+
+  A.suspend
+  # => "intercepting class_method suspend FROM A"
+       "self - suspending"
+  
+  A.new.suspend
+  # => "intercepting instance_method FROM A"
+       "instance - suspending"
+
+If you were to subsequently re-define B.suspend within B, then the chain would be
+broken. In this case, re-configuring would not allow you to set up the chain again.
+Generally speaking, this edge case seems like it could be solved by just following 
+the convention of initializing Mac once. If you were to have a situation with an
+parent-child class that was set up with interceptions, that later had the interception
+point overriden by the child class breaking the chain. You would need to manually
+redefine the alias_method_chain for the child class.
+
+=== Injections
+Principals are injected with:
+- class method current and current=
+
+ApplicationController injected with:
+- before_filters for each principal, whose method body is equivalent to the block passed in the config.
+
+Models injected with:
+- mac_before_* methods. Where the * represents the method, or the ActiveRecord callbacks.
+_ named_scopes :secured 
+
+Copyright (c) 2009 Matthew Vermaak, released under the MIT license

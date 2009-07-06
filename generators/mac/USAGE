@@ -1,0 +1,8 @@
+Description:
+    Puts the Mac initializer into place.
+
+Example:
+    ./script/generate mac
+
+    This will create:
+        config/intializers/mac.rb

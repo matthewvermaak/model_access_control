@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE html 
+     PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>File: README.rdoc</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+  <meta http-equiv="Content-Script-Type" content="text/javascript" />
+  <link rel="stylesheet" href=".././rdoc-style.css" type="text/css" media="screen" />
+  <script type="text/javascript">
+  // <![CDATA[
+
+  function popupCode( url ) {
+    window.open(url, "Code", "resizable=yes,scrollbars=yes,toolbar=no,status=no,height=150,width=400")
+  }
+
+  function toggleCode( id ) {
+    if ( document.getElementById )
+      elem = document.getElementById( id );
+    else if ( document.all )
+      elem = eval( "document.all." + id );
+    else
+      return false;
+
+    elemStyle = elem.style;
+    
+    if ( elemStyle.display != "block" ) {
+      elemStyle.display = "block"
+    } else {
+      elemStyle.display = "none"
+    }
+
+    return true;
+  }
+  
+  // Make codeblocks hidden by default
+  document.writeln( "<style type=\"text/css\">div.method-source-code { display: none }</style>" )
+  
+  // ]]>
+  </script>
+
+</head>
+<body>
+
+
+
+  <div id="fileHeader">
+    <h1>README.rdoc</h1>
+    <table class="header-table">
+    <tr class="top-aligned-row">
+      <td><strong>Path:</strong></td>
+      <td>README.rdoc
+      </td>
+    </tr>
+    <tr class="top-aligned-row">
+      <td><strong>Last Update:</strong></td>
+      <td>Thu Jun 25 10:50:25 -0400 2009</td>
+    </tr>
+    </table>
+  </div>
+  <!-- banner header -->
+
+  <div id="bodyContent">
+
+
+
+  <div id="contextContent">
+
+    <div id="description">
+      <h2>MAC &#8212; [M]odel [A]ccess [C]ontrol</h2>
+<p>
+This plugin provides a Model Security with the &quot;Security in
+Depth&quot; approach.
+</p>
+<h3>GIT</h3>
+<p>
+ssh://cardboard.recyclebank.com/home/git/plugins/mac.git
+</p>
+<h3>Installation</h3>
+<p>
+git clone ssh://cardboard.recyclbank.com/home/git/plugins/mac.git
+</p>
+<p>
+script/generate mac
+</p>
+<pre>
+      create  config/initializers/mac.rb
+      exists  db/migrate
+      create  db/migrate/XXXXXXXXXX_create_user_tokens.rb
+</pre>
+<p>
+rake db:migrate:up VERSION=XXXXXXXXXX
+</p>
+<h3>Usage</h3>
+<p>
+Using the config/initializers/mac.rb file declare your principals,
+interception points, and filters.
+</p>
+<pre>
+  Mac.configure do |config|
+    config.principal User do
+      User.current = @session.user
+    end
+
+    config.intercept Hauler, [:update, :create] do
+      if User.current &amp;&amp; User.current.has?(:super_user)
+        return true
+      end
+      return false
+    end
+
+    config.secured_filter [Hauler, Vendor] do
+      if User.current &amp;&amp; User.current.has?(:super_user)
+        {}
+      else
+        {:conditions =&gt; [&quot;account_id = ?&quot;, user.current.account_id]}
+      end
+    end
+  end
+</pre>
+<p>
+While configuring your principals: the block passed to the principal will
+be used to set an ApplicationController before filter. It is expected to
+use this block to set the principal injected class variable current.
+</p>
+<p>
+While configuring your filters for read activities: the block defined in
+the configuration will be injected as the body of a named_scope :secured
+within each model listed in the array.
+</p>
+<p>
+While configuring your interception points the signature requires the Model
+followed by an array of methods and finally by a block of code to inject.
+The methods that can be intercepted include the ActiveRecord::Base callback
+methods; [:update, :create, :save, :destroy]. In addition, any instance or
+class method of the Model can be intercepted.
+</p>
+<p>
+For instance, consider:
+</p>
+<pre>
+  class A
+    def self.suspend
+      puts &quot;self - suspending&quot;
+    end
+
+    def suspend
+      puts &quot;instance - suspending&quot;
+    end
+  end
+</pre>
+<p>
+Assuming an interception defined as:
+</p>
+<pre>
+  config.intercept A, [:suspend] do
+    puts &quot;intercepting instance_method suspend FROM A&quot;
+    return true
+  end
+
+  config.intercept A, [&quot;self.suspend&quot;] do
+    puts &quot;intercepting class_method suspend FROM A&quot;
+    return true
+  end
+</pre>
+<p>
+Then the following would be true:
+</p>
+<pre>
+  A.suspend
+  # =&gt; &quot;intercepting class_method suspend FROM A&quot;
+       &quot;self - suspending&quot;
+
+  A.new.suspend
+  # =&gt; &quot;intercepting instance_method suspend FROM A&quot;
+       &quot;instance - suspending&quot;
+</pre>
+<p>
+Introducing class inheritance works as expected:
+</p>
+<pre>
+  class B &lt; A
+  end
+
+  B.suspend
+  # =&gt; &quot;intercepting class_method suspend FROM A&quot;
+       &quot;self - suspending&quot;
+
+  B.new.suspend
+  # =&gt; &quot;intercepting instance_method suspend FROM A&quot;
+       &quot;instance - suspending&quot;
+</pre>
+<p>
+Defining an interception on B&#8216;s parent method from B will result in
+overriding A&#8216;s interception while within B, which was the desired
+behavior:
+</p>
+<pre>
+  config.intercept B, [:suspend] do
+    puts &quot;intercepting instance_method FROM B&quot;
+    return true
+  end
+
+  B.suspend
+  # =&gt; &quot;intercepting class_method suspend FROM A&quot;
+       &quot;self - suspending&quot;
+
+  B.new.suspend
+  # =&gt; &quot;intercepting instance_method FROM B&quot;
+       &quot;instance - suspending&quot;
+
+  A.suspend
+  # =&gt; &quot;intercepting class_method suspend FROM A&quot;
+       &quot;self - suspending&quot;
+
+  A.new.suspend
+  # =&gt; &quot;intercepting instance_method FROM A&quot;
+       &quot;instance - suspending&quot;
+</pre>
+<p>
+If you were to subsequently re-define B.suspend within B, then the chain
+would be broken. In this case, re-configuring would not allow you to set up
+the chain again. Generally speaking, this edge case seems like it could be
+solved by just following the convention of initializing Mac once. If you
+were to have a situation with an parent-child class that was set up with
+interceptions, that later had the interception point overriden by the child
+class breaking the chain. You would need to manually redefine the
+alias_method_chain for the child class.
+</p>
+<h3>Injections</h3>
+<p>
+Principals are injected with:
+</p>
+<ul>
+<li>class variable current
+
+</li>
+<li>association for has_many :user_tokens, :as =&gt; :userable
+
+</li>
+<li>method tokens, for returing the token strings.
+
+</li>
+<li>method has?(token) for checking for token presence.
+
+</li>
+</ul>
+<p>
+ApplicationController injected with:
+</p>
+<ul>
+<li>before_filters for each principal, whose method body is equivalent to the
+block passed in the config.
+
+</li>
+</ul>
+<p>
+Models injected with:
+</p>
+<ul>
+<li>mac_before_* methods. Where the * represents the method, or the
+ActiveRecord callbacks.
+
+</li>
+</ul>
+<p>
+_ named_scopes :secured
+</p>
+<p>
+Copyright (c) 2009 RecycleBank, released under the MIT license
+</p>
+
+    </div>
+
+
+   </div>
+
+
+  </div>
+
+
+    <!-- if includes -->
+
+    <div id="section">
+
+
+
+
+
+      
+
+
+    <!-- if method_list -->
+
+
+  </div>
+
+
+<div id="validator-badges">
+  <p><small><a href="http://validator.w3.org/check/referer">[Validate]</a></small></p>
+</div>
+
+</body>
+</html>

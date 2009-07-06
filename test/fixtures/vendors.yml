@@ -1,0 +1,7 @@
+vendor1:
+  id: 1
+  name: "First Vendor"
+
+vendor2:
+  id: 2
+  name: "Second Vendor"
