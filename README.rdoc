@@ -7,8 +7,6 @@ and run arbitrary code.
 script/generate mac
       create  config/initializers/mac.rb
 
-rake db:migrate:up VERSION=XXXXXXXXXX
-
 === Usage
 Using the config/initializers/mac.rb file declare your principals, interception points, and filters.
 
