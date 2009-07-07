@@ -24,9 +24,9 @@ Using the config/initializers/mac.rb file declare your principals, interception 
 
     config.secured_filter [Hauler, Vendor] do
       if User.current && User.current == User.first
-        {}
+        {:conditions => ["account_id = ?", User.current.account_id]}
       else
-        {:conditions => ["account_id = ?", user.current.account_id]}
+        {:conditions => ["1=0"] }
       end
     end
   end
